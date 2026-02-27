@@ -5,32 +5,49 @@ import { formatRelativeTime, truncate } from "@/lib/utils";
 interface ArticleCardProps {
   article: {
     id: string;
+    slug?: string;
     title: string;
     summary: string;
     imageUrl?: string | null;
     viewCount: number;
     likeCount: number;
     createdAt: Date | string;
-    perspective: {
+    isAiGenerated?: boolean;
+    perspective?: {
       name: string;
       slug: string;
       color: string | null;
-    };
-    topic: {
+    } | null;
+    topic?: {
       id: string;
       title: string;
       slug: string;
       _count?: { articles: number };
-    };
+    } | null;
+    author?: {
+      id: string;
+      name: string | null;
+      image: string | null;
+    } | null;
   };
 }
 
 export function ArticleCard({ article }: ArticleCardProps) {
-  const perspectiveCount = article.topic._count?.articles;
+  const perspectiveCount = article.topic?._count?.articles;
+  const isUserArticle = !!article.author && !article.isAiGenerated;
+
+  // User articles link to /article/slug, AI articles link to /topic/id/perspective
+  const href = isUserArticle && article.slug
+    ? `/article/${article.slug}`
+    : article.topic && article.perspective
+      ? `/topic/${article.topic.id}/${article.perspective.slug}`
+      : article.slug
+        ? `/article/${article.slug}`
+        : "#";
 
   return (
     <Link
-      href={`/topic/${article.topic.id}/${article.perspective.slug}`}
+      href={href}
       className="feed-card block rounded-xl bg-white overflow-hidden shadow-sm border border-gray-100"
     >
       {article.imageUrl && (
@@ -44,11 +61,18 @@ export function ArticleCard({ article }: ArticleCardProps) {
       )}
       <div className="p-5">
         <div className="mb-2 flex items-center gap-2">
-          <PerspectiveBadge
-            name={article.perspective.name}
-            color={article.perspective.color}
-            size="sm"
-          />
+          {article.perspective && (
+            <PerspectiveBadge
+              name={article.perspective.name}
+              color={article.perspective.color}
+              size="sm"
+            />
+          )}
+          {article.isAiGenerated && (
+            <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700">
+              AI
+            </span>
+          )}
           {perspectiveCount && perspectiveCount > 1 && (
             <span className="text-xs text-gray-400">
               +{perspectiveCount - 1} more perspectives
@@ -63,6 +87,26 @@ export function ArticleCard({ article }: ArticleCardProps) {
         <p className="mb-3 text-sm text-gray-500 leading-relaxed">
           {truncate(article.summary, 150)}
         </p>
+
+        {/* Author info for user articles */}
+        {article.author && !article.isAiGenerated && (
+          <div className="mb-2 flex items-center gap-2">
+            {article.author.image ? (
+              <img
+                src={article.author.image}
+                alt=""
+                className="h-5 w-5 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-5 w-5 items-center justify-center rounded-full bg-navy-900 text-[9px] font-bold text-white">
+                {article.author.name?.[0]?.toUpperCase() || "?"}
+              </div>
+            )}
+            <span className="text-xs font-medium text-gray-600">
+              {article.author.name}
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center gap-4 text-xs text-gray-400">
           <span className="flex items-center gap-1">
@@ -81,9 +125,11 @@ export function ArticleCard({ article }: ArticleCardProps) {
           <span>{formatRelativeTime(article.createdAt)}</span>
         </div>
 
-        <p className="mt-2 text-xs font-medium text-gray-400 uppercase tracking-wide">
-          {article.topic.title}
-        </p>
+        {article.topic && (
+          <p className="mt-2 text-xs font-medium text-gray-400 uppercase tracking-wide">
+            {article.topic.title}
+          </p>
+        )}
       </div>
     </Link>
   );

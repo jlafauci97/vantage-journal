@@ -44,3 +44,14 @@ export const reactionSchema = z.object({
     "LOVE",
   ]),
 });
+
+export const createArticleSchema = z.object({
+  title: z.string().min(1).max(200),
+  summary: z.string().min(1).max(300),
+  content: z.string().min(1),
+  perspectiveId: z.string().optional(),
+  imageUrl: z.string().url().optional().or(z.literal("")),
+  status: z.enum(["DRAFT", "PUBLISHED"]).default("DRAFT"),
+});
+
+export const updateArticleSchema = createArticleSchema.partial();

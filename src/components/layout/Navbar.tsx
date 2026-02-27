@@ -114,6 +114,13 @@ export function Navbar() {
                         Profile
                       </Link>
                       <Link
+                        href="/my-articles"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        My Articles
+                      </Link>
+                      <Link
                         href="/saved"
                         className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         onClick={() => setMenuOpen(false)}
@@ -235,6 +242,13 @@ export function Navbar() {
                   onClick={() => setMenuOpen(false)}
                 >
                   Profile
+                </Link>
+                <Link
+                  href="/my-articles"
+                  className="block py-2 text-navy-200 hover:text-white"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  My Articles
                 </Link>
                 <Link
                   href="/saved"

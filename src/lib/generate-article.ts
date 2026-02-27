@@ -1,6 +1,7 @@
 import { getOpenAI, MODEL } from "./openai";
 import { prisma } from "./prisma";
 import { z } from "zod";
+import { uniqueSlug } from "./utils";
 
 const GeneratedArticleSchema = z.object({
   title: z.string().min(1),
@@ -135,11 +136,13 @@ export async function generateArticlesForTopic(
             topicId_perspectiveId: { topicId, perspectiveId },
           },
           create: {
+            slug: uniqueSlug(generated.title),
             topicId,
             perspectiveId,
             title: generated.title,
             summary: generated.summary,
             content: generated.content,
+            isAiGenerated: true,
             status: isSafe ? "PUBLISHED" : "DRAFT",
           },
           update: {

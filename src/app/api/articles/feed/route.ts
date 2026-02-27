@@ -13,7 +13,10 @@ export async function GET(req: NextRequest) {
 
   const where: Record<string, unknown> = {
     status: "PUBLISHED",
-    topic: { status: "PUBLISHED" },
+    OR: [
+      { topic: { status: "PUBLISHED" } },
+      { topicId: null },
+    ],
   };
 
   if (perspectiveSlug) {
@@ -24,15 +27,17 @@ export async function GET(req: NextRequest) {
     where,
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    orderBy: [{ viewCount: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ createdAt: "desc" }, { viewCount: "desc" }],
     select: {
       id: true,
+      slug: true,
       title: true,
       summary: true,
       imageUrl: true,
       viewCount: true,
       likeCount: true,
       createdAt: true,
+      isAiGenerated: true,
       perspective: {
         select: {
           id: true,
@@ -48,6 +53,13 @@ export async function GET(req: NextRequest) {
           title: true,
           slug: true,
           _count: { select: { articles: true } },
+        },
+      },
+      author: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
         },
       },
     },

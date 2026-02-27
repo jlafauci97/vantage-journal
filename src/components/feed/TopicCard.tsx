@@ -15,7 +15,7 @@ interface TopicCardProps {
         name: string;
         slug: string;
         color: string | null;
-      };
+      } | null;
     }[];
   };
 }
@@ -45,11 +45,11 @@ export function TopicCard({ topic }: TopicCardProps) {
           </p>
         )}
         <div className="flex flex-wrap gap-1.5 mb-3">
-          {topic.articles.slice(0, 5).map((a, i) => (
+          {topic.articles.filter((a) => a.perspective).slice(0, 5).map((a, i) => (
             <PerspectiveBadge
               key={i}
-              name={a.perspective.name}
-              color={a.perspective.color}
+              name={a.perspective!.name}
+              color={a.perspective!.color}
               size="sm"
             />
           ))}

@@ -13,17 +13,24 @@ interface Perspective {
 
 interface Article {
   id: string;
+  slug?: string;
   title: string;
   summary: string;
   viewCount: number;
   likeCount: number;
   createdAt: Date | string;
-  perspective: Perspective;
-  topic: {
+  isAiGenerated?: boolean;
+  perspective?: Perspective | null;
+  topic?: {
     id: string;
     title: string;
     slug: string;
-  };
+  } | null;
+  author?: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  } | null;
 }
 
 export function FeedList({
@@ -53,10 +60,11 @@ export function FeedList({
       const res = await fetch(`/api/articles/feed?${params}`);
       const data = await res.json();
 
-      if (data.articles?.length > 0) {
-        setArticles((prev) => [...prev, ...data.articles]);
-        setCursor(data.articles[data.articles.length - 1].id);
-        setHasMore(data.articles.length >= 20);
+      const items = data.items || data.articles || [];
+      if (items.length > 0) {
+        setArticles((prev) => [...prev, ...items]);
+        setCursor(items[items.length - 1].id);
+        setHasMore(!!data.nextCursor);
       } else {
         setHasMore(false);
       }

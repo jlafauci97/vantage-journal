@@ -75,6 +75,7 @@ model User {
   sentNotifs    Notification[] @relation("NotificationSender")
   comments      Comment[]
   articleViews  ArticleView[]
+  articles      Article[]      @relation("ArticleAuthor")
 
   @@index([email])
 }
@@ -153,11 +154,15 @@ enum TopicStatus {
 
 model Article {
   id            String        @id @default(cuid())
-  topicId       String
-  perspectiveId String
+  slug          String        @unique
+  topicId       String?
+  perspectiveId String?
+  authorId      String?
   title         String
   summary       String        @db.Text
   content       String        @db.Text
+  contentType   ContentType   @default(MARKDOWN)
+  isAiGenerated Boolean       @default(true)
   imageUrl      String?
   status        ArticleStatus @default(DRAFT)
   viewCount     Int           @default(0)
@@ -166,8 +171,9 @@ model Article {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  topic       Topic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  perspective Perspective @relation(fields: [perspectiveId], references: [id])
+  topic       Topic?       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  perspective Perspective? @relation(fields: [perspectiveId], references: [id])
+  author      User?        @relation("ArticleAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   likes       Like[]
   saves       Save[]
   reactions   Reaction[]
@@ -177,9 +183,16 @@ model Article {
   @@unique([topicId, perspectiveId])
   @@index([topicId])
   @@index([perspectiveId])
+  @@index([authorId])
   @@index([status])
   @@index([createdAt])
   @@index([viewCount])
+  @@index([slug])
+}
+
+enum ContentType {
+  MARKDOWN
+  HTML
 }
 
 enum ArticleStatus {
