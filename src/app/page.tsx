@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { TrendingBar } from "@/components/feed/TrendingBar";
 import { TopicCard } from "@/components/feed/TopicCard";
 import { FeedTabs } from "@/components/feed/FeedTabs";
+import { SuggestedUsers } from "@/components/social/SuggestedUsers";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -96,10 +97,19 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* Articles with Discover / Your Feed tabs */}
+      {/* Articles with Discover / Your Feed tabs + Sidebar */}
       <section>
         <h2 className="mb-4 text-2xl font-bold text-gray-900">Articles</h2>
-        <FeedTabs discoverArticles={latestArticles} />
+        <div className="flex gap-8">
+          <div className="min-w-0 flex-1">
+            <FeedTabs discoverArticles={latestArticles} />
+          </div>
+          <aside className="hidden w-80 shrink-0 lg:block">
+            <div className="sticky top-24">
+              <SuggestedUsers />
+            </div>
+          </aside>
+        </div>
       </section>
     </div>
   );

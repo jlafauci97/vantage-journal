@@ -214,9 +214,17 @@ export default function PerspectiveArticlePage() {
       {/* Other Perspectives CTA */}
       {perspectives.length > 1 && (
         <div className="mt-12 rounded-xl bg-gray-50 p-6">
-          <h3 className="mb-3 text-lg font-semibold text-gray-900">
-            See other perspectives on this story
-          </h3>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              See other perspectives on this story
+            </h3>
+            <Link
+              href={`/topic/${topicId}/compare`}
+              className="text-sm font-medium text-navy-900 hover:underline"
+            >
+              Compare all &rarr;
+            </Link>
+          </div>
           <p className="mb-4 text-sm text-gray-600">
             Compare how {perspectives.length} different viewpoints cover this topic
           </p>
