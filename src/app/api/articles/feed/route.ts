@@ -64,6 +64,9 @@ export async function GET(req: NextRequest) {
           image: true,
         },
       },
+      _count: {
+        select: { comments: true },
+      },
     },
   });
 

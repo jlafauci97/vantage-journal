@@ -78,6 +78,7 @@ model User {
   articles      Article[]      @relation("ArticleAuthor")
   votes         Vote[]
   reposts       Repost[]
+  commentLikes  CommentLike[]
 
   @@index([email])
 }
@@ -306,16 +307,31 @@ model Comment {
   articleId String
   content   String   @db.Text
   parentId  String?
+  likeCount Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  article Article   @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
-  replies Comment[] @relation("CommentReplies")
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article Article       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  parent  Comment?      @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[]     @relation("CommentReplies")
+  likes   CommentLike[]
 
   @@index([articleId])
   @@index([parentId])
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  userId    String
+  commentId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@index([commentId])
 }
 
 // ─── NOTIFICATIONS ──────────────────────────────────────────────

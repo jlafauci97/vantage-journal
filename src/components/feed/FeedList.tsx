@@ -32,6 +32,7 @@ interface Article {
     name: string | null;
     image: string | null;
   } | null;
+  _count?: { comments: number };
 }
 
 export function FeedList({

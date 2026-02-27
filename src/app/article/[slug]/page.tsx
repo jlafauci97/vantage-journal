@@ -7,6 +7,7 @@ import Image from "next/image";
 import { ArticleActions } from "@/components/article/ArticleActions";
 import { VoteButtons } from "@/components/article/VoteButtons";
 import { PerspectiveBadge } from "@/components/perspective/PerspectiveBadge";
+import { CommentSection } from "@/components/comments/CommentSection";
 import { formatDate, estimateReadTime } from "@/lib/utils";
 
 interface ArticleData {
@@ -252,6 +253,11 @@ export default function ArticleViewPage({
         <span>{article.viewCount} views</span>
         <span>{article._count.comments} comments</span>
       </div>
+
+      <hr className="my-8" />
+
+      {/* Comments */}
+      <CommentSection articleId={article.id} />
     </div>
   );
 }
