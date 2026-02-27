@@ -1,0 +1,45 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-navy-50: #eff3ff;
+  --color-navy-100: #dbe5fe;
+  --color-navy-200: #bfcffe;
+  --color-navy-300: #93abfc;
+  --color-navy-400: #6080f8;
+  --color-navy-500: #3b5cf4;
+  --color-navy-600: #253ce9;
+  --color-navy-700: #1d2bd6;
+  --color-navy-800: #1e25ad;
+  --color-navy-900: #002168;
+  --color-navy-950: #001544;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  background-color: #f8f9fa;
+}
+
+.perspective-pill {
+  transition: all 0.2s ease;
+}
+
+.perspective-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.perspective-pill.active {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+.feed-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.feed-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}

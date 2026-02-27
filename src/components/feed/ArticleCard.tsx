@@ -1,0 +1,90 @@
+import Link from "next/link";
+import { PerspectiveBadge } from "@/components/perspective/PerspectiveBadge";
+import { formatRelativeTime, truncate } from "@/lib/utils";
+
+interface ArticleCardProps {
+  article: {
+    id: string;
+    title: string;
+    summary: string;
+    imageUrl?: string | null;
+    viewCount: number;
+    likeCount: number;
+    createdAt: Date | string;
+    perspective: {
+      name: string;
+      slug: string;
+      color: string | null;
+    };
+    topic: {
+      id: string;
+      title: string;
+      slug: string;
+      _count?: { articles: number };
+    };
+  };
+}
+
+export function ArticleCard({ article }: ArticleCardProps) {
+  const perspectiveCount = article.topic._count?.articles;
+
+  return (
+    <Link
+      href={`/topic/${article.topic.id}/${article.perspective.slug}`}
+      className="feed-card block rounded-xl bg-white overflow-hidden shadow-sm border border-gray-100"
+    >
+      {article.imageUrl && (
+        <div className="aspect-video w-full overflow-hidden bg-gray-100">
+          <img
+            src={article.imageUrl}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        </div>
+      )}
+      <div className="p-5">
+        <div className="mb-2 flex items-center gap-2">
+          <PerspectiveBadge
+            name={article.perspective.name}
+            color={article.perspective.color}
+            size="sm"
+          />
+          {perspectiveCount && perspectiveCount > 1 && (
+            <span className="text-xs text-gray-400">
+              +{perspectiveCount - 1} more perspectives
+            </span>
+          )}
+        </div>
+
+        <h3 className="mb-2 text-lg font-bold text-gray-900 leading-snug">
+          {article.title}
+        </h3>
+
+        <p className="mb-3 text-sm text-gray-500 leading-relaxed">
+          {truncate(article.summary, 150)}
+        </p>
+
+        <div className="flex items-center gap-4 text-xs text-gray-400">
+          <span className="flex items-center gap-1">
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            {article.viewCount}
+          </span>
+          <span className="flex items-center gap-1">
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+            {article.likeCount}
+          </span>
+          <span>{formatRelativeTime(article.createdAt)}</span>
+        </div>
+
+        <p className="mt-2 text-xs font-medium text-gray-400 uppercase tracking-wide">
+          {article.topic.title}
+        </p>
+      </div>
+    </Link>
+  );
+}
