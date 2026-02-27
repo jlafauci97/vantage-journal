@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { ImageUpload } from "@/components/upload/ImageUpload";
 
 export default function SettingsPage() {
   const { data: session, status, update } = useSession();
@@ -11,6 +12,11 @@ export default function SettingsPage() {
 
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
+  const [workplace, setWorkplace] = useState("");
+  const [interests, setInterests] = useState("");
+  const [viewpoints, setViewpoints] = useState("");
+  const [image, setImage] = useState("");
+  const [coverImage, setCoverImage] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -22,6 +28,7 @@ export default function SettingsPage() {
     }
     if (session?.user) {
       setName(session.user.name || "");
+      setImage(session.user.image || "");
     }
   }, [session, status, router]);
 
@@ -30,7 +37,13 @@ export default function SettingsPage() {
     fetch(`/api/users/${session.user.id}`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.user?.bio) setBio(data.user.bio);
+        const u = data.user;
+        if (u?.bio) setBio(u.bio);
+        if (u?.workplace) setWorkplace(u.workplace);
+        if (u?.interests) setInterests(u.interests);
+        if (u?.viewpoints) setViewpoints(u.viewpoints);
+        if (u?.coverImage) setCoverImage(u.coverImage);
+        if (u?.image) setImage(u.image);
       })
       .catch(() => {});
   }, [session?.user?.id]);
@@ -47,7 +60,15 @@ export default function SettingsPage() {
       const res = await fetch(`/api/users/${session.user.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, bio }),
+        body: JSON.stringify({
+          name,
+          bio,
+          workplace,
+          interests,
+          viewpoints,
+          image: image || undefined,
+          coverImage: coverImage || undefined,
+        }),
       });
 
       if (!res.ok) {
@@ -94,29 +115,50 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {/* Profile Picture */}
         <div className="rounded-xl bg-white p-6 shadow-sm space-y-6">
-          {/* Avatar */}
-          <div className="flex items-center gap-4">
-            {session.user.image ? (
-              <Image
-                src={session.user.image}
-                alt={session.user.name || ""}
-                width={64}
-                height={64}
-                className="rounded-full"
-              />
-            ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-navy-900 text-xl font-bold text-white">
-                {session.user.name?.charAt(0) || "?"}
-              </div>
-            )}
-            <div>
-              <p className="font-medium text-gray-900">{session.user.name}</p>
-              <p className="text-sm text-gray-500">{session.user.email}</p>
+          <h2 className="text-lg font-semibold text-gray-900">Profile Picture</h2>
+          <div className="flex items-start gap-6">
+            <div className="shrink-0">
+              {image ? (
+                <Image
+                  src={image}
+                  alt={name}
+                  width={80}
+                  height={80}
+                  className="rounded-full"
+                />
+              ) : (
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-navy-900 text-2xl font-bold text-white">
+                  {name?.charAt(0) || "?"}
+                </div>
+              )}
             </div>
+            <ImageUpload
+              endpoint="profileImage"
+              value={image}
+              onChange={setImage}
+              aspectHint="Square image recommended"
+              className="flex-1"
+            />
           </div>
+        </div>
 
-          {/* Name */}
+        {/* Cover Photo */}
+        <div className="rounded-xl bg-white p-6 shadow-sm space-y-4">
+          <h2 className="text-lg font-semibold text-gray-900">Cover Photo</h2>
+          <ImageUpload
+            endpoint="coverImage"
+            value={coverImage}
+            onChange={setCoverImage}
+            aspectHint="Recommended: 1200 x 400px"
+          />
+        </div>
+
+        {/* Basic Info */}
+        <div className="rounded-xl bg-white p-6 shadow-sm space-y-6">
+          <h2 className="text-lg font-semibold text-gray-900">Basic Info</h2>
+
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
               Name
@@ -129,7 +171,24 @@ export default function SettingsPage() {
             />
           </div>
 
-          {/* Bio */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Email
+            </label>
+            <input
+              type="email"
+              value={session.user.email || ""}
+              disabled
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-500"
+            />
+            <p className="mt-1 text-xs text-gray-400">Email cannot be changed</p>
+          </div>
+        </div>
+
+        {/* About You */}
+        <div className="rounded-xl bg-white p-6 shadow-sm space-y-6">
+          <h2 className="text-lg font-semibold text-gray-900">About You</h2>
+
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
               Bio
@@ -145,27 +204,53 @@ export default function SettingsPage() {
             <p className="mt-1 text-xs text-gray-400">{bio.length}/500</p>
           </div>
 
-          {/* Email (read-only) */}
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
-              Email
+              Work / Education
             </label>
             <input
-              type="email"
-              value={session.user.email || ""}
-              disabled
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-500"
+              type="text"
+              value={workplace}
+              onChange={(e) => setWorkplace(e.target.value)}
+              maxLength={200}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-navy-500 focus:ring-2 focus:ring-navy-500/20"
+              placeholder="Where do you work or study?"
             />
-            <p className="mt-1 text-xs text-gray-400">
-              Email cannot be changed
-            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Interests
+            </label>
+            <textarea
+              value={interests}
+              onChange={(e) => setInterests(e.target.value)}
+              rows={2}
+              maxLength={500}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-navy-500 focus:ring-2 focus:ring-navy-500/20"
+              placeholder="What are you interested in?"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Perspectives I Support
+            </label>
+            <textarea
+              value={viewpoints}
+              onChange={(e) => setViewpoints(e.target.value)}
+              rows={2}
+              maxLength={500}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-navy-500 focus:ring-2 focus:ring-navy-500/20"
+              placeholder="What viewpoints do you align with?"
+            />
           </div>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-navy-900 px-6 py-2.5 text-sm font-semibold text-white hover:bg-navy-800 disabled:opacity-50 transition-colors"
+          className="w-full rounded-lg bg-navy-900 px-6 py-3 text-sm font-semibold text-white hover:bg-navy-800 disabled:opacity-50 transition-colors"
         >
           {loading ? "Saving..." : "Save Changes"}
         </button>

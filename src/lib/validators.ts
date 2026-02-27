@@ -22,7 +22,11 @@ export const registerSchema = z.object({
 export const updateProfileSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   bio: z.string().max(500).optional(),
-  image: z.string().url().optional(),
+  image: z.string().url().optional().or(z.literal("")),
+  coverImage: z.string().url().optional().or(z.literal("")),
+  workplace: z.string().max(200).optional(),
+  interests: z.string().max(500).optional(),
+  viewpoints: z.string().max(500).optional(),
 });
 
 export const commentSchema = z.object({

@@ -19,6 +19,9 @@ export async function GET(
       image: true,
       coverImage: true,
       bio: true,
+      workplace: true,
+      interests: true,
+      viewpoints: true,
       createdAt: true,
       _count: {
         select: {
@@ -48,7 +51,44 @@ export async function GET(
     isFollowing = !!follow;
   }
 
-  return NextResponse.json({ ...user, isFollowing });
+  // Fetch liked articles
+  const likedArticles = await prisma.like.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    include: {
+      article: {
+        include: {
+          perspective: { select: { id: true, name: true, slug: true, category: true, color: true } },
+          topic: { select: { id: true, title: true, slug: true } },
+        },
+      },
+    },
+  });
+
+  // Fetch saved articles (only for own profile)
+  let savedArticles: typeof likedArticles = [];
+  if (session?.user?.id === userId) {
+    savedArticles = await prisma.save.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: {
+        article: {
+          include: {
+            perspective: { select: { id: true, name: true, slug: true, category: true, color: true } },
+            topic: { select: { id: true, title: true, slug: true } },
+          },
+        },
+      },
+    });
+  }
+
+  return NextResponse.json({
+    user: { ...user, isFollowing },
+    likedArticles: likedArticles.map((l) => l.article),
+    savedArticles: savedArticles.map((s) => s.article),
+  });
 }
 
 export async function PATCH(

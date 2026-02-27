@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { useState } from "react";
+import { NotificationBadge } from "./NotificationBadge";
 
 export function Navbar() {
   const { data: session } = useSession();
@@ -67,6 +68,18 @@ export function Navbar() {
             >
               Perspectives
             </Link>
+
+            {session?.user && (
+              <>
+                <Link
+                  href="/write"
+                  className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-navy-900 hover:bg-navy-100 transition-colors"
+                >
+                  Write
+                </Link>
+                <NotificationBadge />
+              </>
+            )}
 
             {session?.user ? (
               <div className="relative">
@@ -209,6 +222,13 @@ export function Navbar() {
             </Link>
             {session?.user ? (
               <>
+                <Link
+                  href="/write"
+                  className="block py-2 font-semibold text-white hover:text-navy-200"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Write
+                </Link>
                 <Link
                   href={`/profile/${session.user.id}`}
                   className="block py-2 text-navy-200 hover:text-white"
