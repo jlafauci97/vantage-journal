@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createNotification } from "@/lib/notifications";
 
 export async function POST(
   _req: Request,
@@ -18,7 +19,6 @@ export async function POST(
   });
 
   if (existing) {
-    // Remove repost
     await prisma.$transaction([
       prisma.repost.delete({ where: { id: existing.id } }),
       prisma.article.update({
@@ -29,12 +29,7 @@ export async function POST(
     return NextResponse.json({ reposted: false });
   }
 
-  // Create repost and notify article author
-  const article = await prisma.article.findUnique({
-    where: { id: articleId },
-    select: { authorId: true },
-  });
-
+  // Create repost
   await prisma.$transaction([
     prisma.repost.create({
       data: { userId: session.user.id, articleId },
@@ -43,19 +38,21 @@ export async function POST(
       where: { id: articleId },
       data: { repostCount: { increment: 1 } },
     }),
-    ...(article?.authorId && article.authorId !== session.user.id
-      ? [
-          prisma.notification.create({
-            data: {
-              receiverId: article.authorId,
-              senderId: session.user.id,
-              type: "ARTICLE_REPOSTED",
-              entityId: articleId,
-            },
-          }),
-        ]
-      : []),
   ]);
+
+  // Notify article author
+  const article = await prisma.article.findUnique({
+    where: { id: articleId },
+    select: { authorId: true },
+  });
+  if (article?.authorId) {
+    await createNotification({
+      receiverId: article.authorId,
+      senderId: session.user.id,
+      type: "ARTICLE_REPOSTED",
+      entityId: articleId,
+    });
+  }
 
   return NextResponse.json({ reposted: true });
 }

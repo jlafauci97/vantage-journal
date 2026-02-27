@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createNotification } from "@/lib/notifications";
 
 export async function POST(
   _req: Request,
@@ -31,13 +32,11 @@ export async function POST(
     data: { followerId, followingId: userId },
   });
 
-  await prisma.notification.create({
-    data: {
-      receiverId: userId,
-      senderId: followerId,
-      type: "NEW_FOLLOWER",
-      entityId: followerId,
-    },
+  await createNotification({
+    receiverId: userId,
+    senderId: followerId,
+    type: "NEW_FOLLOWER",
+    entityId: followerId,
   });
 
   return NextResponse.json({ following: true });

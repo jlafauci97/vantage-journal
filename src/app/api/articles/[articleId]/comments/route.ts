@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createNotification } from "@/lib/notifications";
 
 export async function GET(
   req: NextRequest,
@@ -96,17 +97,13 @@ export async function POST(
     }
 
     // Notify the parent comment author about the reply
-    if (parent.userId !== session.user.id) {
-      await prisma.notification.create({
-        data: {
-          receiverId: parent.userId,
-          senderId: session.user.id,
-          type: "COMMENT_REPLY",
-          entityId: articleId,
-          message: content.slice(0, 100),
-        },
-      });
-    }
+    await createNotification({
+      receiverId: parent.userId,
+      senderId: session.user.id,
+      type: "COMMENT_REPLY",
+      entityId: articleId,
+      message: content.slice(0, 100),
+    });
   }
 
   const comment = await prisma.comment.create({

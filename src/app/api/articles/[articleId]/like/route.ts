@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createNotification } from "@/lib/notifications";
 
 export async function POST(
   _req: Request,
@@ -32,6 +33,20 @@ export async function POST(
     where: { id: articleId },
     data: { likeCount: { increment: 1 } },
   });
+
+  // Notify article author
+  const article = await prisma.article.findUnique({
+    where: { id: articleId },
+    select: { authorId: true },
+  });
+  if (article?.authorId) {
+    await createNotification({
+      receiverId: article.authorId,
+      senderId: userId,
+      type: "ARTICLE_LIKED",
+      entityId: articleId,
+    });
+  }
 
   return NextResponse.json({ liked: true });
 }
