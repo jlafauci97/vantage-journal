@@ -15,6 +15,15 @@ export function Footer() {
           <Link href="/trending" className="hover:text-gray-700">
             Trending
           </Link>
+          <Link href="/about" className="hover:text-gray-700">
+            About
+          </Link>
+          <Link href="/terms" className="hover:text-gray-700">
+            Terms
+          </Link>
+          <Link href="/privacy" className="hover:text-gray-700">
+            Privacy
+          </Link>
         </div>
       </div>
     </footer>

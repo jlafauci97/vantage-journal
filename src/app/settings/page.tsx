@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { ImageUpload } from "@/components/upload/ImageUpload";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { signOut } from "next-auth/react";
 
 export default function SettingsPage() {
   const { data: session, status, update } = useSession();
@@ -20,6 +22,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -255,6 +259,43 @@ export default function SettingsPage() {
           {loading ? "Saving..." : "Save Changes"}
         </button>
       </form>
+
+      {/* Danger Zone */}
+      <div className="mt-12 rounded-xl border-2 border-red-200 bg-red-50/50 p-6">
+        <h2 className="text-lg font-bold text-red-700">Danger Zone</h2>
+        <p className="mt-2 text-sm text-red-600/80">
+          Permanently delete your account and all associated data. This action
+          cannot be undone.
+        </p>
+        <button
+          onClick={() => setShowDeleteDialog(true)}
+          className="mt-4 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors"
+        >
+          Delete Account
+        </button>
+      </div>
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        title="Delete your account?"
+        description="This will permanently delete your account, articles, comments, and all associated data. This action cannot be undone."
+        confirmText="Delete Account"
+        confirmPhrase="delete my account"
+        loading={deleting}
+        onConfirm={async () => {
+          setDeleting(true);
+          try {
+            const res = await fetch("/api/users/delete", { method: "DELETE" });
+            if (!res.ok) throw new Error("Failed to delete");
+            await signOut({ callbackUrl: "/" });
+          } catch {
+            setError("Failed to delete account. Please try again.");
+            setShowDeleteDialog(false);
+            setDeleting(false);
+          }
+        }}
+      />
     </div>
   );
 }
