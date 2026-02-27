@@ -37,8 +37,10 @@ interface Article {
 
 export function FeedList({
   initialArticles = [],
+  mode,
 }: {
   initialArticles?: Article[];
+  mode?: string;
 }) {
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [cursor, setCursor] = useState<string | null>(
@@ -58,6 +60,7 @@ export function FeedList({
       const params = new URLSearchParams();
       if (cursor) params.set("cursor", cursor);
       params.set("limit", "20");
+      if (mode) params.set("mode", mode);
 
       const res = await fetch(`/api/articles/feed?${params}`);
       const data = await res.json();
@@ -75,7 +78,7 @@ export function FeedList({
     } finally {
       setLoading(false);
     }
-  }, [cursor, hasMore, loading]);
+  }, [cursor, hasMore, loading, mode]);
 
   useEffect(() => {
     const node = observerRef.current;

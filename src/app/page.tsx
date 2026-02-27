@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { FeedList } from "@/components/feed/FeedList";
 import { TrendingBar } from "@/components/feed/TrendingBar";
 import { TopicCard } from "@/components/feed/TopicCard";
+import { FeedTabs } from "@/components/feed/FeedTabs";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -24,22 +24,36 @@ export default async function HomePage() {
       },
     }),
     prisma.article.findMany({
-      where: { status: "PUBLISHED", topic: { status: "PUBLISHED" } },
-      orderBy: [{ viewCount: "desc" }, { createdAt: "desc" }],
+      where: {
+        status: "PUBLISHED",
+        OR: [
+          { topic: { status: "PUBLISHED" } },
+          { topicId: null },
+        ],
+      },
+      orderBy: [{ createdAt: "desc" }, { viewCount: "desc" }],
       take: 20,
       select: {
         id: true,
+        slug: true,
         title: true,
         summary: true,
+        imageUrl: true,
         viewCount: true,
         likeCount: true,
+        voteScore: true,
         createdAt: true,
+        isAiGenerated: true,
         perspective: {
           select: { id: true, name: true, slug: true, category: true, color: true },
         },
         topic: {
-          select: { id: true, title: true, slug: true },
+          select: { id: true, title: true, slug: true, _count: { select: { articles: true } } },
         },
+        author: {
+          select: { id: true, name: true, image: true },
+        },
+        _count: { select: { comments: true } },
       },
     }),
   ]);
@@ -82,12 +96,10 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* Latest Articles with Infinite Scroll */}
+      {/* Articles with Discover / Your Feed tabs */}
       <section>
-        <h2 className="mb-4 text-2xl font-bold text-gray-900">
-          Latest Articles
-        </h2>
-        <FeedList initialArticles={latestArticles} />
+        <h2 className="mb-4 text-2xl font-bold text-gray-900">Articles</h2>
+        <FeedTabs discoverArticles={latestArticles} />
       </section>
     </div>
   );
