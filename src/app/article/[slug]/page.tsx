@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArticleActions } from "@/components/article/ArticleActions";
+import { VoteButtons } from "@/components/article/VoteButtons";
 import { PerspectiveBadge } from "@/components/perspective/PerspectiveBadge";
 import { formatDate, estimateReadTime } from "@/lib/utils";
 
@@ -19,9 +20,13 @@ interface ArticleData {
   imageUrl: string | null;
   viewCount: number;
   likeCount: number;
+  voteScore: number;
+  repostCount: number;
   createdAt: string;
   isLiked: boolean;
   isSaved: boolean;
+  userVote: number | null;
+  isReposted: boolean;
   perspective: {
     id: string;
     name: string;
@@ -220,6 +225,17 @@ export default function ArticleViewPage({
       )}
 
       <hr className="my-8" />
+
+      {/* Vote & Repost */}
+      <VoteButtons
+        articleId={article.id}
+        initialScore={article.voteScore}
+        initialVote={article.userVote}
+        initialReposted={article.isReposted}
+        initialRepostCount={article.repostCount}
+      />
+
+      <div className="my-4" />
 
       {/* Actions */}
       <ArticleActions

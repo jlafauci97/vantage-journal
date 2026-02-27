@@ -11,6 +11,7 @@ interface ArticleCardProps {
     imageUrl?: string | null;
     viewCount: number;
     likeCount: number;
+    voteScore?: number;
     createdAt: Date | string;
     isAiGenerated?: boolean;
     perspective?: {
@@ -109,6 +110,16 @@ export function ArticleCard({ article }: ArticleCardProps) {
         )}
 
         <div className="flex items-center gap-4 text-xs text-gray-400">
+          {article.voteScore !== undefined && article.voteScore !== 0 && (
+            <span className={`flex items-center gap-1 font-medium ${
+              article.voteScore > 0 ? "text-green-600" : "text-red-500"
+            }`}>
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={article.voteScore > 0 ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
+              </svg>
+              {article.voteScore > 0 ? "+" : ""}{article.voteScore}
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

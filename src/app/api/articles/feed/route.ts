@@ -36,6 +36,8 @@ export async function GET(req: NextRequest) {
       imageUrl: true,
       viewCount: true,
       likeCount: true,
+      voteScore: true,
+      repostCount: true,
       createdAt: true,
       isAiGenerated: true,
       perspective: {

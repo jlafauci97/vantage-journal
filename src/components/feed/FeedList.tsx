@@ -18,6 +18,7 @@ interface Article {
   summary: string;
   viewCount: number;
   likeCount: number;
+  voteScore?: number;
   createdAt: Date | string;
   isAiGenerated?: boolean;
   perspective?: Perspective | null;
