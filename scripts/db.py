@@ -38,13 +38,18 @@ load_env()
 SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "")
 SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
-if not SUPABASE_URL or not SERVICE_KEY:
-    print("ERROR: Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
-    sys.exit(1)
-
 from supabase import create_client
 
-supabase = create_client(SUPABASE_URL, SERVICE_KEY)
+_supabase = None
+
+def get_supabase():
+    global _supabase
+    if _supabase is None:
+        if not SUPABASE_URL or not SERVICE_KEY:
+            print("ERROR: Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
+            sys.exit(1)
+        _supabase = create_client(SUPABASE_URL, SERVICE_KEY)
+    return _supabase
 
 
 # ── AMENITY CATEGORIZATION ──────────────────────────────────────────────────
@@ -201,7 +206,7 @@ def match_building(street: str, zip_code: str, borough: str = "") -> str | None:
     normalized = normalize_address(street)
 
     if zip_code:
-        result = supabase.table("buildings") \
+        result = get_supabase().table("buildings") \
             .select("id") \
             .eq("zip_code", zip_code) \
             .ilike("full_address", f"%{normalized}%") \
@@ -213,7 +218,7 @@ def match_building(street: str, zip_code: str, borough: str = "") -> str | None:
         # Try house number match
         parts = normalized.split()
         if len(parts) >= 2:
-            result = supabase.table("buildings") \
+            result = get_supabase().table("buildings") \
                 .select("id") \
                 .eq("zip_code", zip_code) \
                 .eq("house_number", parts[0]) \
@@ -223,7 +228,7 @@ def match_building(street: str, zip_code: str, borough: str = "") -> str | None:
                 return result.data[0]["id"]
 
     if borough:
-        result = supabase.table("buildings") \
+        result = get_supabase().table("buildings") \
             .select("id") \
             .eq("borough", borough) \
             .ilike("full_address", f"%{normalized}%") \
@@ -274,13 +279,13 @@ def create_building(street: str, borough: str, zip_code: str,
     }
 
     try:
-        result = supabase.table("buildings").insert(row).execute()
+        result = get_supabase().table("buildings").insert(row).execute()
         if result.data and len(result.data) > 0:
             return result.data[0]["id"]
     except Exception as e:
         err_msg = str(e)
         if "duplicate" in err_msg.lower() or "unique" in err_msg.lower():
-            existing = supabase.table("buildings") \
+            existing = get_supabase().table("buildings") \
                 .select("id") \
                 .eq("slug", slug) \
                 .limit(1) \
@@ -320,7 +325,7 @@ def upsert_rents(building_id: str, rent_by_beds: dict, source: str) -> int:
         return 0
 
     try:
-        supabase.table("building_rents") \
+        get_supabase().table("building_rents") \
             .upsert(rows, on_conflict="building_id,source,bedrooms") \
             .execute()
         return len(rows)
@@ -352,7 +357,7 @@ def upsert_amenities(building_id: str, amenities: list[str], source: str) -> int
         })
 
     try:
-        supabase.table("building_amenities") \
+        get_supabase().table("building_amenities") \
             .upsert(rows, on_conflict="building_id,source,amenity") \
             .execute()
         return len(rows)
@@ -398,7 +403,7 @@ def upsert_listing(building_id: str, listing: dict, source: str) -> bool:
     }
 
     try:
-        supabase.table("building_listings") \
+        get_supabase().table("building_listings") \
             .upsert(row, on_conflict="building_id,source") \
             .execute()
         return True
