@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
-Scrape rent data from zillow.com for NYC's five boroughs using Scrapling.
+Scrape rent data from zillow.com for NYC neighborhoods using Scrapling.
 
 Uses StealthyFetcher with real_chrome=True to bypass anti-bot protection,
 then extracts structured JSON from Next.js __NEXT_DATA__ payload.
 
+Searches by NEIGHBORHOOD instead of borough to bypass Zillow's ~800 result
+cap per search, yielding significantly more total coverage.
+
 Usage:
-    python3 scripts/scrape-zillow.py                        # all boroughs, 5 pages each
-    python3 scripts/scrape-zillow.py --borough=Manhattan    # single borough
-    python3 scripts/scrape-zillow.py --pages=20             # more pages per borough
-    python3 scripts/scrape-zillow.py --start-page=3         # start from page 3
-    python3 scripts/scrape-zillow.py --dry-run              # preview without DB writes
+    python3 scripts/scrape-zillow.py                              # all neighborhoods, 20 pages each
+    python3 scripts/scrape-zillow.py --borough=Manhattan          # all Manhattan neighborhoods
+    python3 scripts/scrape-zillow.py --neighborhood="upper-west-side" # single neighborhood
+    python3 scripts/scrape-zillow.py --pages=10                   # fewer pages per neighborhood
+    python3 scripts/scrape-zillow.py --dry-run                    # preview without DB writes
 """
 
 import json
@@ -32,19 +35,181 @@ from db import (
 from scrapling import StealthyFetcher
 
 # ── CONSTANTS ────────────────────────────────────────────────────────────────
-BOROUGH_URLS = {
-    "Manhattan": "https://www.zillow.com/manhattan-new-york-ny/rentals/",
-    "Brooklyn": "https://www.zillow.com/brooklyn-new-york-ny/rentals/",
-    "Queens": "https://www.zillow.com/queens-new-york-ny/rentals/",
-    "Bronx": "https://www.zillow.com/bronx-new-york-ny/rentals/",
-    "Staten Island": "https://www.zillow.com/staten-island-new-york-ny/rentals/",
-}
-
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 PAGE_DELAY = 4
 LISTINGS_PER_PAGE = 41
 SOURCE = "zillow"
+
+# ── NEIGHBORHOOD URLs ────────────────────────────────────────────────────────
+# Zillow URL slug -> (display name, borough)
+# Searching by neighborhood bypasses the ~800 result cap per borough search.
+
+NEIGHBORHOODS = {
+    # ── Manhattan (40+ neighborhoods) ────────────────────────────────────
+    "battery-park-city-new-york-ny": ("Battery Park City", "Manhattan"),
+    "chelsea-new-york-ny": ("Chelsea", "Manhattan"),
+    "chinatown-new-york-ny": ("Chinatown", "Manhattan"),
+    "east-harlem-new-york-ny": ("East Harlem", "Manhattan"),
+    "east-village-new-york-ny": ("East Village", "Manhattan"),
+    "financial-district-new-york-ny": ("Financial District", "Manhattan"),
+    "flatiron-new-york-ny": ("Flatiron", "Manhattan"),
+    "gramercy-park-new-york-ny": ("Gramercy Park", "Manhattan"),
+    "greenwich-village-new-york-ny": ("Greenwich Village", "Manhattan"),
+    "hamilton-heights-new-york-ny": ("Hamilton Heights", "Manhattan"),
+    "harlem-new-york-ny": ("Harlem", "Manhattan"),
+    "hells-kitchen-new-york-ny": ("Hell's Kitchen", "Manhattan"),
+    "inwood-new-york-ny": ("Inwood", "Manhattan"),
+    "kips-bay-new-york-ny": ("Kips Bay", "Manhattan"),
+    "lenox-hill-new-york-ny": ("Lenox Hill", "Manhattan"),
+    "little-italy-new-york-ny": ("Little Italy", "Manhattan"),
+    "lower-east-side-new-york-ny": ("Lower East Side", "Manhattan"),
+    "marble-hill-new-york-ny": ("Marble Hill", "Manhattan"),
+    "midtown-new-york-ny": ("Midtown", "Manhattan"),
+    "midtown-east-new-york-ny": ("Midtown East", "Manhattan"),
+    "midtown-west-new-york-ny": ("Midtown West", "Manhattan"),
+    "morningside-heights-new-york-ny": ("Morningside Heights", "Manhattan"),
+    "murray-hill-new-york-ny": ("Murray Hill", "Manhattan"),
+    "noho-new-york-ny": ("NoHo", "Manhattan"),
+    "nolita-new-york-ny": ("Nolita", "Manhattan"),
+    "roosevelt-island-new-york-ny": ("Roosevelt Island", "Manhattan"),
+    "soho-new-york-ny": ("SoHo", "Manhattan"),
+    "stuyvesant-town-new-york-ny": ("Stuyvesant Town", "Manhattan"),
+    "tribeca-new-york-ny": ("Tribeca", "Manhattan"),
+    "two-bridges-new-york-ny": ("Two Bridges", "Manhattan"),
+    "upper-east-side-new-york-ny": ("Upper East Side", "Manhattan"),
+    "upper-west-side-new-york-ny": ("Upper West Side", "Manhattan"),
+    "washington-heights-new-york-ny": ("Washington Heights", "Manhattan"),
+    "west-village-new-york-ny": ("West Village", "Manhattan"),
+    "yorkville-new-york-ny": ("Yorkville", "Manhattan"),
+
+    # ── Brooklyn (30+ neighborhoods) ─────────────────────────────────────
+    "bay-ridge-new-york-ny": ("Bay Ridge", "Brooklyn"),
+    "bed-stuy-new-york-ny": ("Bed-Stuy", "Brooklyn"),
+    "bensonhurst-new-york-ny": ("Bensonhurst", "Brooklyn"),
+    "boerum-hill-new-york-ny": ("Boerum Hill", "Brooklyn"),
+    "borough-park-new-york-ny": ("Borough Park", "Brooklyn"),
+    "brighton-beach-new-york-ny": ("Brighton Beach", "Brooklyn"),
+    "brooklyn-heights-new-york-ny": ("Brooklyn Heights", "Brooklyn"),
+    "brownsville-new-york-ny": ("Brownsville", "Brooklyn"),
+    "bushwick-new-york-ny": ("Bushwick", "Brooklyn"),
+    "canarsie-new-york-ny": ("Canarsie", "Brooklyn"),
+    "carroll-gardens-new-york-ny": ("Carroll Gardens", "Brooklyn"),
+    "clinton-hill-new-york-ny": ("Clinton Hill", "Brooklyn"),
+    "cobble-hill-new-york-ny": ("Cobble Hill", "Brooklyn"),
+    "coney-island-new-york-ny": ("Coney Island", "Brooklyn"),
+    "crown-heights-new-york-ny": ("Crown Heights", "Brooklyn"),
+    "ditmas-park-new-york-ny": ("Ditmas Park", "Brooklyn"),
+    "downtown-brooklyn-new-york-ny": ("Downtown Brooklyn", "Brooklyn"),
+    "dumbo-new-york-ny": ("DUMBO", "Brooklyn"),
+    "dyker-heights-new-york-ny": ("Dyker Heights", "Brooklyn"),
+    "east-flatbush-new-york-ny": ("East Flatbush", "Brooklyn"),
+    "east-new-york-new-york-ny": ("East New York", "Brooklyn"),
+    "flatbush-new-york-ny": ("Flatbush", "Brooklyn"),
+    "flatlands-new-york-ny": ("Flatlands", "Brooklyn"),
+    "fort-greene-new-york-ny": ("Fort Greene", "Brooklyn"),
+    "gowanus-new-york-ny": ("Gowanus", "Brooklyn"),
+    "gravesend-new-york-ny": ("Gravesend", "Brooklyn"),
+    "greenpoint-new-york-ny": ("Greenpoint", "Brooklyn"),
+    "kensington-brooklyn-new-york-ny": ("Kensington", "Brooklyn"),
+    "midwood-new-york-ny": ("Midwood", "Brooklyn"),
+    "park-slope-new-york-ny": ("Park Slope", "Brooklyn"),
+    "prospect-heights-new-york-ny": ("Prospect Heights", "Brooklyn"),
+    "prospect-lefferts-gardens-new-york-ny": ("Prospect Lefferts Gardens", "Brooklyn"),
+    "red-hook-new-york-ny": ("Red Hook", "Brooklyn"),
+    "sheepshead-bay-new-york-ny": ("Sheepshead Bay", "Brooklyn"),
+    "south-slope-new-york-ny": ("South Slope", "Brooklyn"),
+    "sunset-park-new-york-ny": ("Sunset Park", "Brooklyn"),
+    "williamsburg-new-york-ny": ("Williamsburg", "Brooklyn"),
+    "windsor-terrace-new-york-ny": ("Windsor Terrace", "Brooklyn"),
+
+    # ── Queens (25+ neighborhoods) ───────────────────────────────────────
+    "astoria-new-york-ny": ("Astoria", "Queens"),
+    "bayside-new-york-ny": ("Bayside", "Queens"),
+    "briarwood-new-york-ny": ("Briarwood", "Queens"),
+    "college-point-new-york-ny": ("College Point", "Queens"),
+    "corona-new-york-ny": ("Corona", "Queens"),
+    "east-elmhurst-new-york-ny": ("East Elmhurst", "Queens"),
+    "elmhurst-new-york-ny": ("Elmhurst", "Queens"),
+    "far-rockaway-new-york-ny": ("Far Rockaway", "Queens"),
+    "flushing-new-york-ny": ("Flushing", "Queens"),
+    "forest-hills-new-york-ny": ("Forest Hills", "Queens"),
+    "fresh-meadows-new-york-ny": ("Fresh Meadows", "Queens"),
+    "howard-beach-new-york-ny": ("Howard Beach", "Queens"),
+    "jackson-heights-new-york-ny": ("Jackson Heights", "Queens"),
+    "jamaica-new-york-ny": ("Jamaica", "Queens"),
+    "kew-gardens-new-york-ny": ("Kew Gardens", "Queens"),
+    "long-island-city-new-york-ny": ("Long Island City", "Queens"),
+    "maspeth-new-york-ny": ("Maspeth", "Queens"),
+    "middle-village-new-york-ny": ("Middle Village", "Queens"),
+    "ozone-park-new-york-ny": ("Ozone Park", "Queens"),
+    "rego-park-new-york-ny": ("Rego Park", "Queens"),
+    "richmond-hill-new-york-ny": ("Richmond Hill", "Queens"),
+    "ridgewood-new-york-ny": ("Ridgewood", "Queens"),
+    "south-ozone-park-new-york-ny": ("South Ozone Park", "Queens"),
+    "sunnyside-new-york-ny": ("Sunnyside", "Queens"),
+    "whitestone-new-york-ny": ("Whitestone", "Queens"),
+    "woodhaven-new-york-ny": ("Woodhaven", "Queens"),
+    "woodside-new-york-ny": ("Woodside", "Queens"),
+
+    # ── Bronx (20+ neighborhoods) ────────────────────────────────────────
+    "baychester-new-york-ny": ("Baychester", "Bronx"),
+    "belmont-new-york-ny": ("Belmont", "Bronx"),
+    "castle-hill-new-york-ny": ("Castle Hill", "Bronx"),
+    "city-island-new-york-ny": ("City Island", "Bronx"),
+    "co-op-city-new-york-ny": ("Co-op City", "Bronx"),
+    "concourse-new-york-ny": ("Concourse", "Bronx"),
+    "country-club-new-york-ny": ("Country Club", "Bronx"),
+    "fordham-new-york-ny": ("Fordham", "Bronx"),
+    "highbridge-new-york-ny": ("Highbridge", "Bronx"),
+    "hunts-point-new-york-ny": ("Hunts Point", "Bronx"),
+    "kingsbridge-new-york-ny": ("Kingsbridge", "Bronx"),
+    "melrose-new-york-ny": ("Melrose", "Bronx"),
+    "morris-heights-new-york-ny": ("Morris Heights", "Bronx"),
+    "morris-park-new-york-ny": ("Morris Park", "Bronx"),
+    "morrisania-new-york-ny": ("Morrisania", "Bronx"),
+    "mott-haven-new-york-ny": ("Mott Haven", "Bronx"),
+    "norwood-new-york-ny": ("Norwood", "Bronx"),
+    "parkchester-new-york-ny": ("Parkchester", "Bronx"),
+    "pelham-bay-new-york-ny": ("Pelham Bay", "Bronx"),
+    "pelham-gardens-new-york-ny": ("Pelham Gardens", "Bronx"),
+    "riverdale-new-york-ny": ("Riverdale", "Bronx"),
+    "soundview-new-york-ny": ("Soundview", "Bronx"),
+    "throgs-neck-new-york-ny": ("Throgs Neck", "Bronx"),
+    "tremont-new-york-ny": ("Tremont", "Bronx"),
+    "university-heights-new-york-ny": ("University Heights", "Bronx"),
+    "wakefield-new-york-ny": ("Wakefield", "Bronx"),
+    "westchester-square-new-york-ny": ("Westchester Square", "Bronx"),
+    "williamsbridge-new-york-ny": ("Williamsbridge", "Bronx"),
+    "woodlawn-new-york-ny": ("Woodlawn", "Bronx"),
+
+    # ── Staten Island (10+ neighborhoods) ────────────────────────────────
+    "annadale-new-york-ny": ("Annadale", "Staten Island"),
+    "arden-heights-new-york-ny": ("Arden Heights", "Staten Island"),
+    "bulls-head-new-york-ny": ("Bulls Head", "Staten Island"),
+    "dongan-hills-new-york-ny": ("Dongan Hills", "Staten Island"),
+    "eltingville-new-york-ny": ("Eltingville", "Staten Island"),
+    "great-kills-new-york-ny": ("Great Kills", "Staten Island"),
+    "grymes-hill-new-york-ny": ("Grymes Hill", "Staten Island"),
+    "huguenot-new-york-ny": ("Huguenot", "Staten Island"),
+    "mariners-harbor-new-york-ny": ("Mariners Harbor", "Staten Island"),
+    "new-brighton-new-york-ny": ("New Brighton", "Staten Island"),
+    "new-dorp-new-york-ny": ("New Dorp", "Staten Island"),
+    "port-richmond-new-york-ny": ("Port Richmond", "Staten Island"),
+    "prince-s-bay-new-york-ny": ("Prince's Bay", "Staten Island"),
+    "rosebank-new-york-ny": ("Rosebank", "Staten Island"),
+    "st-george-new-york-ny": ("St. George", "Staten Island"),
+    "stapleton-new-york-ny": ("Stapleton", "Staten Island"),
+    "todt-hill-new-york-ny": ("Todt Hill", "Staten Island"),
+    "tottenville-new-york-ny": ("Tottenville", "Staten Island"),
+    "west-brighton-new-york-ny": ("West Brighton", "Staten Island"),
+    "westerleigh-new-york-ny": ("Westerleigh", "Staten Island"),
+}
+
+
+def get_zillow_url(slug: str) -> str:
+    """Build Zillow rental search URL from a neighborhood slug."""
+    return f"https://www.zillow.com/{slug}/rentals/"
 
 
 # ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -263,14 +428,54 @@ def extract_listings(data: dict) -> tuple[list[dict], int]:
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(description="Scrape zillow.com for NYC rent data")
-    parser.add_argument("--borough", type=str, default="", help="Single borough to scrape")
-    parser.add_argument("--pages", type=int, default=5, help="Pages per borough (41 listings/page)")
-    parser.add_argument("--dry-run", action="store_true", help="Preview without writing to DB")
-    parser.add_argument("--start-page", type=int, default=1, help="Starting page number")
+    parser = argparse.ArgumentParser(description="Scrape zillow.com for NYC rent data by neighborhood")
+    parser.add_argument("--borough", type=str, default="",
+                        help="Filter to neighborhoods in this borough (Manhattan, Brooklyn, Queens, Bronx, Staten Island)")
+    parser.add_argument("--neighborhood", type=str, default="",
+                        help="Single neighborhood slug to scrape (e.g. 'upper-west-side-new-york-ny')")
+    parser.add_argument("--pages", type=int, default=20,
+                        help="Max pages per neighborhood (41 listings/page)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Preview without writing to DB")
+    parser.add_argument("--start-page", type=int, default=1,
+                        help="Starting page number")
+    parser.add_argument("--list-neighborhoods", action="store_true",
+                        help="Print all neighborhood slugs and exit")
     args = parser.parse_args()
 
-    boroughs = {args.borough: BOROUGH_URLS[args.borough]} if args.borough else BOROUGH_URLS
+    if args.list_neighborhoods:
+        for slug, (name, boro) in sorted(NEIGHBORHOODS.items(), key=lambda x: (x[1][1], x[1][0])):
+            print(f"  {boro:15s} | {name:30s} | --neighborhood={slug}")
+        print(f"\nTotal: {len(NEIGHBORHOODS)} neighborhoods")
+        return
+
+    # Determine which neighborhoods to scrape
+    if args.neighborhood:
+        slug = args.neighborhood
+        if slug not in NEIGHBORHOODS:
+            # Try partial match
+            matches = [s for s in NEIGHBORHOODS if slug in s]
+            if len(matches) == 1:
+                slug = matches[0]
+            elif len(matches) > 1:
+                print(f"Ambiguous neighborhood '{slug}'. Matches:")
+                for m in matches:
+                    print(f"  {m} ({NEIGHBORHOODS[m][0]}, {NEIGHBORHOODS[m][1]})")
+                return
+            else:
+                print(f"Unknown neighborhood slug: {slug}")
+                print("Use --list-neighborhoods to see all available slugs")
+                return
+        targets = {slug: NEIGHBORHOODS[slug]}
+    elif args.borough:
+        targets = {s: info for s, info in NEIGHBORHOODS.items() if info[1] == args.borough}
+        if not targets:
+            print(f"No neighborhoods found for borough: {args.borough}")
+            print("Valid boroughs: Manhattan, Brooklyn, Queens, Bronx, Staten Island")
+            return
+    else:
+        targets = NEIGHBORHOODS
+
     max_pages = args.pages
     dry_run = args.dry_run
 
@@ -283,13 +488,23 @@ def main():
     total_amenities = 0
     total_listings_saved = 0
     total_listings = 0
+    neighborhoods_scraped = 0
 
-    print(f"Scraping zillow.com — boroughs={list(boroughs.keys())}, pages={max_pages}, dry_run={dry_run}")
-    print(f"Start time: {datetime.now()}\n")
+    boroughs_in_scope = sorted(set(info[1] for info in targets.values()))
+    print(f"Scraping zillow.com by neighborhood")
+    print(f"  Boroughs: {boroughs_in_scope}")
+    print(f"  Neighborhoods: {len(targets)}")
+    print(f"  Max pages per neighborhood: {max_pages}")
+    print(f"  Estimated max listings: ~{len(targets) * max_pages * LISTINGS_PER_PAGE:,}")
+    print(f"  Dry run: {dry_run}")
+    print(f"  Start time: {datetime.now()}\n")
 
-    for borough, base_url in boroughs.items():
+    for slug, (hood_name, borough) in targets.items():
+        neighborhoods_scraped += 1
+        base_url = get_zillow_url(slug)
+
         print(f"\n{'='*60}")
-        print(f"BOROUGH: {borough}")
+        print(f"[{neighborhoods_scraped}/{len(targets)}] {hood_name} ({borough})")
         print(f"{'='*60}")
 
         for page_num in range(args.start_page, args.start_page + max_pages):
@@ -305,7 +520,7 @@ def main():
             print(f"    Got {len(listings)} listings (total available: {total_results})")
 
             if len(listings) == 0:
-                print(f"    No more listings. Moving to next borough.")
+                print(f"    No more listings. Moving to next neighborhood.")
                 break
 
             total_listings += len(listings)
@@ -352,7 +567,7 @@ def main():
                 print(f"    {label} {addr} -> {rents_added} rents, {amenities_added} amenities, listing={'OK' if listing_saved else 'FAIL'}")
 
             if page_num * LISTINGS_PER_PAGE >= total_results:
-                print(f"    Reached end of results ({total_results} total). Moving to next borough.")
+                print(f"    Reached end of results ({total_results} total). Moving to next neighborhood.")
                 break
 
             print(f"    Waiting {PAGE_DELAY}s...")
@@ -364,6 +579,7 @@ def main():
     print(f"\n{'='*60}")
     print(f"SUMMARY")
     print(f"{'='*60}")
+    print(f"Neighborhoods scraped:   {neighborhoods_scraped}")
     print(f"Total listings scraped:  {total_listings}")
     print(f"Matched to buildings:    {total_matched}")
     print(f"New buildings created:   {total_created}")
