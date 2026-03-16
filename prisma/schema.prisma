@@ -361,3 +361,118 @@ enum NotificationType {
   NEW_TOPIC
   COMMENT_REPLY
 }
+
+// ─── BUILDINGS / RENTALS ────────────────────────────────────────────
+
+model Building {
+  id                 String   @id @default(cuid())
+  fullAddress        String   @map("full_address")
+  houseNumber        String?  @map("house_number")
+  streetName         String?  @map("street_name")
+  borough            String?
+  city               String?  @default("New York")
+  state              String?  @default("NY")
+  zipCode            String?  @map("zip_code")
+  slug               String   @unique
+  latitude           Float?
+  longitude          Float?
+  overallScore       Int      @default(0) @map("overall_score")
+  reviewCount        Int      @default(0) @map("review_count")
+  violationCount     Int      @default(0) @map("violation_count")
+  complaintCount     Int      @default(0) @map("complaint_count")
+  litigationCount    Int      @default(0) @map("litigation_count")
+  dobViolationCount  Int      @default(0) @map("dob_violation_count")
+  crimeCount         Int      @default(0) @map("crime_count")
+  bedbugReportCount  Int      @default(0) @map("bedbug_report_count")
+  evictionCount      Int      @default(0) @map("eviction_count")
+  permitCount        Int      @default(0) @map("permit_count")
+  sidewalkShedCount  Int      @default(0) @map("sidewalk_shed_count")
+  leadViolationCount Int      @default(0) @map("lead_violation_count")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  rents     BuildingRent[]
+  amenities BuildingAmenity[]
+  listings  BuildingListing[]
+
+  @@index([borough])
+  @@index([zipCode])
+  @@index([slug])
+  @@map("buildings")
+}
+
+model BuildingRent {
+  id           String   @id @default(cuid())
+  buildingId   String   @map("building_id")
+  source       String   // streeteasy, zillow, rent_com, apartments_com
+  bedrooms     Int      // 0 = studio
+  minRent      Int?     @map("min_rent")
+  maxRent      Int?     @map("max_rent")
+  medianRent   Int?     @map("median_rent")
+  listingCount Int      @default(0) @map("listing_count")
+  scrapedAt    DateTime @default(now()) @map("scraped_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@unique([buildingId, source, bedrooms])
+  @@index([buildingId])
+  @@map("building_rents")
+}
+
+model BuildingAmenity {
+  id         String   @id @default(cuid())
+  buildingId String   @map("building_id")
+  source     String   // streeteasy, zillow, rent_com, apartments_com
+  amenity    String
+  category   String   // building, outdoor, fitness, parking, laundry, security, pet, storage, luxury, other
+  scrapedAt  DateTime @default(now()) @map("scraped_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@unique([buildingId, source, amenity])
+  @@index([buildingId])
+  @@map("building_amenities")
+}
+
+model BuildingListing {
+  id                 String    @id @default(cuid())
+  buildingId         String    @map("building_id")
+  source             String    // streeteasy, zillow, rent_com, apartments_com
+  listingName        String?   @map("listing_name")
+  listingUrl         String?   @map("listing_url")
+  propertyType       String?   @map("property_type")
+  priceMin           Int?      @map("price_min")
+  priceMax           Int?      @map("price_max")
+  priceText          String?   @map("price_text")
+  bedMin             Int?      @map("bed_min")
+  bedMax             Int?      @map("bed_max")
+  bathMin            Int?      @map("bath_min")
+  bathMax            Int?      @map("bath_max")
+  sqftMin            Int?      @map("sqft_min")
+  sqftMax            Int?      @map("sqft_max")
+  bedText            String?   @map("bed_text")
+  bathText           String?   @map("bath_text")
+  sqftText           String?   @map("sqft_text")
+  unitsAvailable     Int       @default(0) @map("units_available")
+  unitsAvailableText String?   @map("units_available_text")
+  availabilityStatus String?   @map("availability_status")
+  managementCompany  String?   @map("management_company")
+  verified           Boolean   @default(false)
+  hasPriceDrops      Boolean   @default(false) @map("has_price_drops")
+  listingViews       Int?      @map("listing_views")
+  updatedAtSource    DateTime? @map("updated_at_source")
+  floorPlans         Json      @default("[]") @map("floor_plans")
+  bedPriceData       Json      @default("[]") @map("bed_price_data")
+  officeHours        Json      @default("[]") @map("office_hours")
+  scrapedAt          DateTime  @default(now()) @map("scraped_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@unique([buildingId, source])
+  @@index([buildingId])
+  @@map("building_listings")
+}
