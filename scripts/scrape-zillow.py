@@ -26,7 +26,7 @@ from datetime import datetime
 # Add scripts dir to path for db import
 sys.path.insert(0, __import__("pathlib").Path(__file__).parent.__str__())
 from db import (
-    get_conn, match_building, create_building,
+    match_building, create_building,
     upsert_rents, upsert_amenities, upsert_listing,
     normalize_address, detect_borough_from_city, detect_borough_from_zip,
     normalize_amenity, categorize_amenity, AMENITY_CATEGORIES,
@@ -479,7 +479,7 @@ def main():
     max_pages = args.pages
     dry_run = args.dry_run
 
-    conn = None if dry_run else get_conn()
+    # DB connection is managed by db.py module (Supabase client)
 
     total_matched = 0
     total_created = 0
@@ -538,13 +538,13 @@ def main():
                 zip_code = listing["zip_code"]
                 boro = detect_borough(listing)
 
-                building_id = match_building(conn, street, zip_code, boro)
+                building_id = match_building(street, zip_code, boro)
 
                 if building_id:
                     total_matched += 1
                     label = "MATCHED"
                 else:
-                    building_id = create_building(conn, street, boro, zip_code,
+                    building_id = create_building(street, boro, zip_code,
                                                   listing.get("latitude"),
                                                   listing.get("longitude"))
                     if building_id:
@@ -555,9 +555,9 @@ def main():
                         print(f"    SKIP {addr} (could not match or create)")
                         continue
 
-                rents_added = upsert_rents(conn, building_id, listing["rent_by_beds"], SOURCE)
-                amenities_added = upsert_amenities(conn, building_id, listing["amenities"], SOURCE)
-                listing_saved = upsert_listing(conn, building_id, listing, SOURCE)
+                rents_added = upsert_rents(building_id, listing["rent_by_beds"], SOURCE)
+                amenities_added = upsert_amenities(building_id, listing["amenities"], SOURCE)
+                listing_saved = upsert_listing(building_id, listing, SOURCE)
 
                 total_rents += rents_added
                 total_amenities += amenities_added
@@ -572,9 +572,6 @@ def main():
 
             print(f"    Waiting {PAGE_DELAY}s...")
             time.sleep(PAGE_DELAY)
-
-    if conn:
-        conn.close()
 
     print(f"\n{'='*60}")
     print(f"SUMMARY")

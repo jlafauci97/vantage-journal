@@ -1,0 +1,4 @@
+scrapling>=0.2
+supabase>=2.0
+patchright>=1.0
+browserforge>=1.0

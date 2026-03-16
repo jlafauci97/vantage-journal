@@ -1,9 +1,10 @@
 """
 Shared database helpers for rental scrapers.
 
-Reads DATABASE_URL from .env (Prisma-style) and provides functions
-to match/create buildings and upsert rents, amenities, and listings
-using psycopg2 against the same PostgreSQL database Prisma manages.
+Uses Supabase client (same database as lucid-rents) to match/create
+buildings and upsert rents, amenities, and listings.
+
+Requires env vars: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 """
 
 import json
@@ -13,14 +14,11 @@ import sys
 from pathlib import Path
 from datetime import datetime, timezone
 
-import psycopg2
-import psycopg2.extras
-
 
 # ── ENV ──────────────────────────────────────────────────────────────────────
 def load_env():
-    """Load DATABASE_URL from .env file in project root."""
-    for env_file in [".env", ".env.local"]:
+    """Load env vars from .env.local in project root."""
+    for env_file in [".env.local", ".env"]:
         env_path = Path(__file__).parent.parent / env_file
         if env_path.exists():
             for line in env_path.read_text().splitlines():
@@ -30,40 +28,23 @@ def load_env():
                 if "=" in line:
                     key, val = line.split("=", 1)
                     key = key.strip()
-                    val = val.strip().strip('"').strip("'")
+                    val = val.strip().strip('"').strip("'").replace("\\n", "")
                     if key not in os.environ:
                         os.environ[key] = val
 
 
 load_env()
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
-if not DATABASE_URL:
-    print("ERROR: Missing DATABASE_URL in .env or environment")
+SUPABASE_URL = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "")
+SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+if not SUPABASE_URL or not SERVICE_KEY:
+    print("ERROR: Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
     sys.exit(1)
 
+from supabase import create_client
 
-def get_conn():
-    """Get a psycopg2 connection."""
-    return psycopg2.connect(DATABASE_URL)
-
-
-# ── CUID-LIKE ID GENERATION ─────────────────────────────────────────────────
-import random
-import string
-import time as _time
-
-_COUNTER = random.randint(0, 0xFFFFFF)
-
-
-def cuid():
-    """Generate a cuid-like ID compatible with Prisma's @default(cuid())."""
-    global _COUNTER
-    _COUNTER = (_COUNTER + 1) & 0xFFFFFF
-    ts = hex(int(_time.time() * 1000))[2:]
-    count = hex(_COUNTER)[2:].zfill(6)
-    rand = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
-    return f"c{ts}{count}{rand}"
+supabase = create_client(SUPABASE_URL, SERVICE_KEY)
 
 
 # ── AMENITY CATEGORIZATION ──────────────────────────────────────────────────
@@ -161,52 +142,29 @@ def normalize_address(address: str) -> str:
 
 # ── BOROUGH DETECTION ────────────────────────────────────────────────────────
 CITY_TO_BOROUGH = {
-    "new york": "Manhattan",
-    "manhattan": "Manhattan",
-    "brooklyn": "Brooklyn",
-    "bronx": "Bronx",
-    "queens": "Queens",
-    "long island city": "Queens",
-    "astoria": "Queens",
-    "flushing": "Queens",
-    "jamaica": "Queens",
-    "jackson heights": "Queens",
-    "woodside": "Queens",
-    "sunnyside": "Queens",
-    "forest hills": "Queens",
-    "rego park": "Queens",
-    "staten island": "Staten Island",
-    "arverne": "Queens",
-    "far rockaway": "Queens",
-    "woodhaven": "Queens",
-    "ridgewood": "Queens",
-    "bayside": "Queens",
-    "elmhurst": "Queens",
-    "corona": "Queens",
-    "kew gardens": "Queens",
-    "ozone park": "Queens",
-    "howard beach": "Queens",
-    "fresh meadows": "Queens",
-    "whitestone": "Queens",
-    "college point": "Queens",
-    "maspeth": "Queens",
-    "middle village": "Queens",
-    "glendale": "Queens",
-    "east elmhurst": "Queens",
-    "south ozone park": "Queens",
-    "south richmond hill": "Queens",
-    "richmond hill": "Queens",
-    "springfield gardens": "Queens",
-    "laurelton": "Queens",
-    "rosedale": "Queens",
-    "cambria heights": "Queens",
-    "st. albans": "Queens",
-    "hollis": "Queens",
-    "floral park": "Queens",
-    "little neck": "Queens",
-    "douglaston": "Queens",
-    "glen oaks": "Queens",
-    "bellerose": "Queens",
+    "new york": "Manhattan", "manhattan": "Manhattan",
+    "brooklyn": "Brooklyn", "bronx": "Bronx",
+    "queens": "Queens", "staten island": "Staten Island",
+    "long island city": "Queens", "astoria": "Queens",
+    "flushing": "Queens", "jamaica": "Queens",
+    "jackson heights": "Queens", "woodside": "Queens",
+    "sunnyside": "Queens", "forest hills": "Queens",
+    "rego park": "Queens", "arverne": "Queens",
+    "far rockaway": "Queens", "woodhaven": "Queens",
+    "ridgewood": "Queens", "bayside": "Queens",
+    "elmhurst": "Queens", "corona": "Queens",
+    "kew gardens": "Queens", "ozone park": "Queens",
+    "howard beach": "Queens", "fresh meadows": "Queens",
+    "whitestone": "Queens", "college point": "Queens",
+    "maspeth": "Queens", "middle village": "Queens",
+    "glendale": "Queens", "east elmhurst": "Queens",
+    "south ozone park": "Queens", "south richmond hill": "Queens",
+    "richmond hill": "Queens", "springfield gardens": "Queens",
+    "laurelton": "Queens", "rosedale": "Queens",
+    "cambria heights": "Queens", "st. albans": "Queens",
+    "hollis": "Queens", "floral park": "Queens",
+    "little neck": "Queens", "douglaston": "Queens",
+    "glen oaks": "Queens", "bellerose": "Queens",
     "briarwood": "Queens",
 }
 
@@ -234,48 +192,50 @@ def generate_slug(full_address: str) -> str:
     return re.sub(r'(^-+|-+$)', '', re.sub(r'[^a-z0-9]+', '-', full_address.lower()))
 
 
-# ── DATABASE OPERATIONS ─────────────────────────────────────────────────────
-def match_building(conn, street: str, zip_code: str, borough: str = "") -> str | None:
+# ── DATABASE OPERATIONS (Supabase) ──────────────────────────────────────────
+def match_building(street: str, zip_code: str, borough: str = "") -> str | None:
     """Try to match a listing to an existing building by normalized address + zip."""
     if not street:
         return None
 
     normalized = normalize_address(street)
-    cur = conn.cursor()
 
     if zip_code:
-        cur.execute(
-            "SELECT id FROM buildings WHERE zip_code = %s AND full_address ILIKE %s LIMIT 1",
-            (zip_code, f"%{normalized}%")
-        )
-        row = cur.fetchone()
-        if row:
-            return row[0]
+        result = supabase.table("buildings") \
+            .select("id") \
+            .eq("zip_code", zip_code) \
+            .ilike("full_address", f"%{normalized}%") \
+            .limit(1) \
+            .execute()
+        if result.data and len(result.data) > 0:
+            return result.data[0]["id"]
 
         # Try house number match
         parts = normalized.split()
         if len(parts) >= 2:
-            cur.execute(
-                "SELECT id FROM buildings WHERE zip_code = %s AND house_number = %s LIMIT 1",
-                (zip_code, parts[0])
-            )
-            row = cur.fetchone()
-            if row:
-                return row[0]
+            result = supabase.table("buildings") \
+                .select("id") \
+                .eq("zip_code", zip_code) \
+                .eq("house_number", parts[0]) \
+                .limit(1) \
+                .execute()
+            if result.data and len(result.data) > 0:
+                return result.data[0]["id"]
 
     if borough:
-        cur.execute(
-            "SELECT id FROM buildings WHERE borough = %s AND full_address ILIKE %s LIMIT 1",
-            (borough, f"%{normalized}%")
-        )
-        row = cur.fetchone()
-        if row:
-            return row[0]
+        result = supabase.table("buildings") \
+            .select("id") \
+            .eq("borough", borough) \
+            .ilike("full_address", f"%{normalized}%") \
+            .limit(1) \
+            .execute()
+        if result.data and len(result.data) > 0:
+            return result.data[0]["id"]
 
     return None
 
 
-def create_building(conn, street: str, borough: str, zip_code: str,
+def create_building(street: str, borough: str, zip_code: str,
                     latitude: float = None, longitude: float = None) -> str | None:
     """Create a new building record. Returns building ID."""
     parts = street.upper().split(None, 1)
@@ -287,190 +247,161 @@ def create_building(conn, street: str, borough: str, zip_code: str,
         full_address += f", {zip_code}"
 
     slug = generate_slug(full_address)
-    bid = cuid()
-    now = datetime.now(timezone.utc)
 
-    cur = conn.cursor()
+    row = {
+        "full_address": full_address,
+        "house_number": house_number,
+        "street_name": street_name,
+        "borough": borough,
+        "city": "New York",
+        "state": "NY",
+        "zip_code": zip_code or None,
+        "slug": slug,
+        "latitude": latitude,
+        "longitude": longitude,
+        "overall_score": 0,
+        "review_count": 0,
+        "violation_count": 0,
+        "complaint_count": 0,
+        "litigation_count": 0,
+        "dob_violation_count": 0,
+        "crime_count": 0,
+        "bedbug_report_count": 0,
+        "eviction_count": 0,
+        "permit_count": 0,
+        "sidewalk_shed_count": 0,
+        "lead_violation_count": 0,
+    }
+
     try:
-        cur.execute("""
-            INSERT INTO buildings (id, full_address, house_number, street_name, borough,
-                                   city, state, zip_code, slug, latitude, longitude,
-                                   overall_score, review_count, violation_count, complaint_count,
-                                   litigation_count, dob_violation_count, crime_count,
-                                   bedbug_report_count, eviction_count, permit_count,
-                                   sidewalk_shed_count, lead_violation_count,
-                                   created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, %s, %s)
-            ON CONFLICT (slug) DO UPDATE SET updated_at = EXCLUDED.updated_at
-            RETURNING id
-        """, (bid, full_address, house_number, street_name, borough,
-              "New York", "NY", zip_code or None, slug, latitude, longitude,
-              now, now))
-        row = cur.fetchone()
-        conn.commit()
-        return row[0] if row else None
+        result = supabase.table("buildings").insert(row).execute()
+        if result.data and len(result.data) > 0:
+            return result.data[0]["id"]
     except Exception as e:
-        conn.rollback()
+        err_msg = str(e)
+        if "duplicate" in err_msg.lower() or "unique" in err_msg.lower():
+            existing = supabase.table("buildings") \
+                .select("id") \
+                .eq("slug", slug) \
+                .limit(1) \
+                .execute()
+            if existing.data and len(existing.data) > 0:
+                return existing.data[0]["id"]
         print(f"    Building creation error: {e}")
-        return None
+    return None
 
 
-def upsert_rents(conn, building_id: str, rent_by_beds: dict, source: str) -> int:
+def upsert_rents(building_id: str, rent_by_beds: dict, source: str) -> int:
     """Upsert rent data for a building."""
     if not rent_by_beds:
         return 0
 
-    now = datetime.now(timezone.utc)
-    cur = conn.cursor()
-    count = 0
-
+    now = datetime.now(timezone.utc).isoformat()
+    rows = []
     for beds, data in rent_by_beds.items():
         if beds < 0:
             continue
         min_r = data["min_rent"]
         max_r = data["max_rent"]
         median = (min_r + max_r) // 2
-        rid = cuid()
+        rows.append({
+            "building_id": building_id,
+            "source": source,
+            "bedrooms": beds,
+            "min_rent": min_r,
+            "max_rent": max_r,
+            "median_rent": median,
+            "listing_count": 1,
+            "scraped_at": now,
+            "updated_at": now,
+        })
 
-        try:
-            cur.execute("""
-                INSERT INTO building_rents (id, building_id, source, bedrooms,
-                    min_rent, max_rent, median_rent, listing_count,
-                    scraped_at, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s)
-                ON CONFLICT (building_id, source, bedrooms)
-                DO UPDATE SET min_rent = EXCLUDED.min_rent,
-                              max_rent = EXCLUDED.max_rent,
-                              median_rent = EXCLUDED.median_rent,
-                              listing_count = EXCLUDED.listing_count,
-                              scraped_at = EXCLUDED.scraped_at,
-                              updated_at = EXCLUDED.updated_at
-            """, (rid, building_id, source, beds, min_r, max_r, median,
-                  now, now, now))
-            count += 1
-        except Exception as e:
-            conn.rollback()
-            print(f"    Rent upsert error: {e}")
+    if not rows:
+        return 0
 
-    conn.commit()
-    return count
+    try:
+        supabase.table("building_rents") \
+            .upsert(rows, on_conflict="building_id,source,bedrooms") \
+            .execute()
+        return len(rows)
+    except Exception as e:
+        print(f"    Rent upsert error: {e}")
+        return 0
 
 
-def upsert_amenities(conn, building_id: str, amenities: list[str], source: str) -> int:
+def upsert_amenities(building_id: str, amenities: list[str], source: str) -> int:
     """Upsert amenity data for a building."""
     if not amenities:
         return 0
 
-    now = datetime.now(timezone.utc)
-    cur = conn.cursor()
-    count = 0
+    now = datetime.now(timezone.utc).isoformat()
+    rows = []
     seen = set()
-
     for a in amenities:
         normalized = normalize_amenity(a)
         key = normalized.lower()
         if key in seen:
             continue
         seen.add(key)
-        aid = cuid()
-
-        try:
-            cur.execute("""
-                INSERT INTO building_amenities (id, building_id, source, amenity, category,
-                    scraped_at, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (building_id, source, amenity) DO NOTHING
-            """, (aid, building_id, source, normalized, categorize_amenity(a),
-                  now, now))
-            count += 1
-        except Exception as e:
-            conn.rollback()
-            print(f"    Amenity upsert error: {e}")
-
-    conn.commit()
-    return count
-
-
-def upsert_listing(conn, building_id: str, listing: dict, source: str) -> bool:
-    """Upsert full listing data into building_listings table."""
-    now = datetime.now(timezone.utc)
-    lid = cuid()
-    cur = conn.cursor()
+        rows.append({
+            "building_id": building_id,
+            "source": source,
+            "amenity": normalized,
+            "category": categorize_amenity(a),
+            "scraped_at": now,
+        })
 
     try:
-        cur.execute("""
-            INSERT INTO building_listings (id, building_id, source,
-                listing_name, listing_url, property_type,
-                price_min, price_max, price_text,
-                bed_min, bed_max, bath_min, bath_max,
-                sqft_min, sqft_max, bed_text, bath_text, sqft_text,
-                units_available, units_available_text, availability_status,
-                management_company, verified, has_price_drops,
-                listing_views, updated_at_source,
-                floor_plans, bed_price_data, office_hours,
-                scraped_at, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (building_id, source)
-            DO UPDATE SET listing_name = EXCLUDED.listing_name,
-                          listing_url = EXCLUDED.listing_url,
-                          property_type = EXCLUDED.property_type,
-                          price_min = EXCLUDED.price_min,
-                          price_max = EXCLUDED.price_max,
-                          price_text = EXCLUDED.price_text,
-                          bed_min = EXCLUDED.bed_min,
-                          bed_max = EXCLUDED.bed_max,
-                          bath_min = EXCLUDED.bath_min,
-                          bath_max = EXCLUDED.bath_max,
-                          sqft_min = EXCLUDED.sqft_min,
-                          sqft_max = EXCLUDED.sqft_max,
-                          bed_text = EXCLUDED.bed_text,
-                          bath_text = EXCLUDED.bath_text,
-                          sqft_text = EXCLUDED.sqft_text,
-                          units_available = EXCLUDED.units_available,
-                          units_available_text = EXCLUDED.units_available_text,
-                          availability_status = EXCLUDED.availability_status,
-                          management_company = EXCLUDED.management_company,
-                          verified = EXCLUDED.verified,
-                          has_price_drops = EXCLUDED.has_price_drops,
-                          listing_views = EXCLUDED.listing_views,
-                          updated_at_source = EXCLUDED.updated_at_source,
-                          floor_plans = EXCLUDED.floor_plans,
-                          bed_price_data = EXCLUDED.bed_price_data,
-                          office_hours = EXCLUDED.office_hours,
-                          scraped_at = EXCLUDED.scraped_at
-        """, (lid, building_id, source,
-              listing.get("listing_name"),
-              listing.get("listing_url"),
-              listing.get("property_type"),
-              listing.get("price_min"),
-              listing.get("price_max"),
-              listing.get("price_text"),
-              listing.get("bed_min"),
-              listing.get("bed_max"),
-              listing.get("bath_min"),
-              listing.get("bath_max"),
-              listing.get("sqft_min"),
-              listing.get("sqft_max"),
-              listing.get("bed_text"),
-              listing.get("bath_text"),
-              listing.get("sqft_text"),
-              listing.get("units_available", 0),
-              listing.get("units_available_text"),
-              listing.get("availability_status"),
-              listing.get("management_company"),
-              listing.get("verified", False),
-              listing.get("has_price_drops", False),
-              listing.get("listing_views"),
-              listing.get("updated_at_source"),
-              json.dumps(listing.get("floor_plans", [])),
-              json.dumps(listing.get("bed_price_data", [])),
-              json.dumps(listing.get("office_hours", [])),
-              now, now))
-        conn.commit()
+        supabase.table("building_amenities") \
+            .upsert(rows, on_conflict="building_id,source,amenity") \
+            .execute()
+        return len(rows)
+    except Exception as e:
+        print(f"    Amenity upsert error: {e}")
+        return 0
+
+
+def upsert_listing(building_id: str, listing: dict, source: str) -> bool:
+    """Upsert full listing data into building_listings table."""
+    now = datetime.now(timezone.utc).isoformat()
+
+    row = {
+        "building_id": building_id,
+        "source": source,
+        "listing_name": listing.get("listing_name"),
+        "listing_url": listing.get("listing_url"),
+        "property_type": listing.get("property_type"),
+        "price_min": listing.get("price_min"),
+        "price_max": listing.get("price_max"),
+        "price_text": listing.get("price_text"),
+        "bed_min": listing.get("bed_min"),
+        "bed_max": listing.get("bed_max"),
+        "bath_min": listing.get("bath_min"),
+        "bath_max": listing.get("bath_max"),
+        "sqft_min": listing.get("sqft_min"),
+        "sqft_max": listing.get("sqft_max"),
+        "bed_text": listing.get("bed_text"),
+        "bath_text": listing.get("bath_text"),
+        "sqft_text": listing.get("sqft_text"),
+        "units_available": listing.get("units_available", 0),
+        "units_available_text": listing.get("units_available_text"),
+        "availability_status": listing.get("availability_status"),
+        "management_company": listing.get("management_company"),
+        "verified": listing.get("verified", False),
+        "has_price_drops": listing.get("has_price_drops", False),
+        "listing_views": listing.get("listing_views"),
+        "updated_at_source": listing.get("updated_at_source"),
+        "floor_plans": json.dumps(listing.get("floor_plans", [])),
+        "bed_price_data": json.dumps(listing.get("bed_price_data", [])),
+        "office_hours": json.dumps(listing.get("office_hours", [])),
+        "scraped_at": now,
+    }
+
+    try:
+        supabase.table("building_listings") \
+            .upsert(row, on_conflict="building_id,source") \
+            .execute()
         return True
     except Exception as e:
-        conn.rollback()
         print(f"    Listing upsert error: {e}")
         return False
