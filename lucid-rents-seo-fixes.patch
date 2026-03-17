@@ -1,0 +1,394 @@
+From 114053534e4d97608332b8dbb40367fdd117d2bd Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 17 Mar 2026 08:10:31 +0000
+Subject: [PATCH] Fix SEO: dynamic robots, security headers, metadata gaps,
+ structured data
+
+- next.config.ts: Add compression, image optimization (avif/webp), security
+  headers (X-Content-Type-Options, X-Frame-Options, Referrer-Policy), and
+  static asset cache-control
+- robots.ts: Dynamically compute sitemap count from building total instead
+  of hardcoding 15; remove /review/new from disallow list
+- layout.tsx: Add font-display: swap to Geist fonts to prevent CLS
+- seo.ts: Add aggregateRating to landlordJsonLd; add newsArticleJsonLd helper
+- landlord page: Pass avgScore to landlordJsonLd for rich snippet eligibility
+- compare page: Add canonical URL and full OpenGraph metadata
+- search page: Add revalidate=60, description, canonical, OpenGraph metadata
+- unit page: Add canonical URL and OpenGraph metadata
+- rankings page: Fix canonical URL to use city-prefixed path
+
+https://claude.ai/code/session_01U5mQW2v8xyLTVMXHJQWaj1
+---
+ next.config.ts                                | 46 +++++++++++--
+ .../building/[borough]/unit/[unitId]/page.tsx | 21 +++++-
+ src/app/[city]/compare/page.tsx               | 11 ++++
+ src/app/[city]/landlord/[name]/page.tsx       |  2 +-
+ src/app/[city]/rankings/page.tsx              |  6 +-
+ src/app/[city]/search/page.tsx                | 23 ++++++-
+ src/app/layout.tsx                            |  2 +
+ src/app/robots.ts                             | 64 +++++++++++++------
+ src/lib/seo.ts                                | 48 +++++++++++++-
+ 9 files changed, 188 insertions(+), 35 deletions(-)
+
+diff --git a/next.config.ts b/next.config.ts
+index 6d94fc0..d389e6a 100644
+--- a/next.config.ts
++++ b/next.config.ts
+@@ -1,5 +1,41 @@
+-import type { NextConfig } from "next";
+-
+-const nextConfig: NextConfig = {};
+-
+-export default nextConfig;
++import type { NextConfig } from "next";
++
++const nextConfig: NextConfig = {
++  compress: true,
++  images: {
++    formats: ["image/avif", "image/webp"],
++  },
++  async headers() {
++    return [
++      {
++        source: "/:path*",
++        headers: [
++          {
++            key: "X-Content-Type-Options",
++            value: "nosniff",
++          },
++          {
++            key: "X-Frame-Options",
++            value: "DENY",
++          },
++          {
++            key: "Referrer-Policy",
++            value: "strict-origin-when-cross-origin",
++          },
++        ],
++      },
++      {
++        // Cache static assets aggressively
++        source: "/(.*)\\.(jpg|jpeg|png|gif|svg|ico|webp|avif|woff|woff2)",
++        headers: [
++          {
++            key: "Cache-Control",
++            value: "public, max-age=31536000, immutable",
++          },
++        ],
++      },
++    ];
++  },
++};
++
++export default nextConfig;
+diff --git a/src/app/[city]/building/[borough]/unit/[unitId]/page.tsx b/src/app/[city]/building/[borough]/unit/[unitId]/page.tsx
+index 22ca399..93feae6 100644
+--- a/src/app/[city]/building/[borough]/unit/[unitId]/page.tsx
++++ b/src/app/[city]/building/[borough]/unit/[unitId]/page.tsx
+@@ -8,7 +8,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/Card";
+ import { ArrowLeft, BedDouble, Bath, Layers, Building2 } from "lucide-react";
+ import type { HpdViolation, ReviewWithDetails } from "@/types";
+ import type { Metadata } from "next";
+-import { buildingUrl } from "@/lib/seo";
++import { buildingUrl, canonicalUrl } from "@/lib/seo";
+ 
+ interface UnitPageProps {
+   params: Promise<{ borough: string; unitId: string }>;
+@@ -25,9 +25,24 @@ export async function generateMetadata({ params }: UnitPageProps): Promise<Metad
+ 
+   if (!unit || !building) return { title: "Unit Not Found" };
+ 
++  const title = `Unit ${unit.unit_number} - ${building.full_address}`;
++  const description = `View reviews, violations, and details for Unit ${unit.unit_number} at ${building.full_address} in ${building.borough}, NYC.`;
++  const url = canonicalUrl(
++    `${buildingUrl(building)}/unit/${unitId}`
++  );
++
+   return {
+-    title: `Unit ${unit.unit_number} - ${building.full_address}`,
+-    description: `View reviews, violations, and details for Unit ${unit.unit_number} at ${building.full_address} in ${building.borough}, NYC.`,
++    title,
++    description,
++    alternates: { canonical: url },
++    openGraph: {
++      title,
++      description,
++      url,
++      siteName: "Lucid Rents",
++      type: "website",
++      locale: "en_US",
++    },
+   };
+ }
+ 
+diff --git a/src/app/[city]/compare/page.tsx b/src/app/[city]/compare/page.tsx
+index 21ea97a..6d85ea0 100644
+--- a/src/app/[city]/compare/page.tsx
++++ b/src/app/[city]/compare/page.tsx
+@@ -8,11 +8,22 @@ import { AdBlock } from "@/components/ui/AdBlock";
+ import { ArrowLeftRight } from "lucide-react";
+ import type { Metadata } from "next";
+ import type { Building } from "@/types";
++import { canonicalUrl, cityPath } from "@/lib/seo";
+ 
+ export const metadata: Metadata = {
+   title: "Compare Buildings",
+   description:
+     "Compare NYC buildings side by side. View scores, violations, complaints, and more to find the best apartment.",
++  alternates: { canonical: canonicalUrl(cityPath("/compare")) },
++  openGraph: {
++    title: "Compare NYC Buildings Side by Side",
++    description:
++      "Compare NYC buildings side by side. View scores, violations, complaints, and more to find the best apartment.",
++    url: canonicalUrl(cityPath("/compare")),
++    siteName: "Lucid Rents",
++    type: "website",
++    locale: "en_US",
++  },
+ };
+ 
+ interface ComparePageProps {
+diff --git a/src/app/[city]/landlord/[name]/page.tsx b/src/app/[city]/landlord/[name]/page.tsx
+index bd367e9..88a9261 100644
+--- a/src/app/[city]/landlord/[name]/page.tsx
++++ b/src/app/[city]/landlord/[name]/page.tsx
+@@ -172,7 +172,7 @@ export default async function LandlordDetailPage({
+   return (
+     <AdSidebar>
+     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+-      <JsonLd data={landlordJsonLd(displayName, totalBuildings)} />
++      <JsonLd data={landlordJsonLd(displayName, totalBuildings, avgScore)} />
+       <Breadcrumbs
+         items={[
+           { label: "Home", href: "/" },
+diff --git a/src/app/[city]/rankings/page.tsx b/src/app/[city]/rankings/page.tsx
+index da1d759..ab11523 100644
+--- a/src/app/[city]/rankings/page.tsx
++++ b/src/app/[city]/rankings/page.tsx
+@@ -1,7 +1,7 @@
+ import { createClient } from "@/lib/supabase/server";
+ import { AlertTriangle, Building2, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
+ import Link from "next/link";
+-import { buildingUrl, canonicalUrl } from "@/lib/seo";
++import { buildingUrl, canonicalUrl, cityPath } from "@/lib/seo";
+ import { AdSidebar } from "@/components/ui/AdSidebar";
+ import { AdBlock } from "@/components/ui/AdBlock";
+ import type { Metadata } from "next";
+@@ -10,12 +10,12 @@ export const metadata: Metadata = {
+   title: "Worst Rated Buildings in NYC | Lucid Rents",
+   description:
+     "NYC buildings ranked by HPD violations, 311 complaints, and reported issues. Find the worst-rated buildings in Manhattan, Brooklyn, Queens, Bronx, and Staten Island.",
+-  alternates: { canonical: canonicalUrl("/rankings") },
++  alternates: { canonical: canonicalUrl(cityPath("/rankings")) },
+   openGraph: {
+     title: "Worst Rated Buildings in NYC",
+     description:
+       "NYC buildings ranked by HPD violations and 311 complaints.",
+-    url: canonicalUrl("/rankings"),
++    url: canonicalUrl(cityPath("/rankings")),
+     siteName: "Lucid Rents",
+     type: "website",
+     locale: "en_US",
+diff --git a/src/app/[city]/search/page.tsx b/src/app/[city]/search/page.tsx
+index 1885ba5..4bea9f6 100644
+--- a/src/app/[city]/search/page.tsx
++++ b/src/app/[city]/search/page.tsx
+@@ -7,9 +7,11 @@ import { AdSidebar } from "@/components/ui/AdSidebar";
+ import { AdBlock } from "@/components/ui/AdBlock";
+ import { createClient } from "@/lib/supabase/server";
+ import type { Building } from "@/types";
+-import { cityPath } from "@/lib/seo";
++import { cityPath, canonicalUrl } from "@/lib/seo";
+ import type { Metadata } from "next";
+ 
++export const revalidate = 60;
++
+ interface SearchPageProps {
+   searchParams: Promise<{ q?: string; borough?: string; zip?: string; page?: string }>;
+ }
+@@ -18,8 +20,25 @@ export async function generateMetadata({
+   searchParams,
+ }: SearchPageProps): Promise<Metadata> {
+   const params = await searchParams;
++  const title = params.q
++    ? `Search: ${params.q} — NYC Buildings`
++    : "Search NYC Buildings";
++  const description = params.q
++    ? `Search results for "${params.q}" — find building violations, complaints, and reviews in NYC.`
++    : "Search NYC apartment buildings by address, neighborhood, or zip code. View violations, complaints, and tenant reviews.";
++
+   return {
+-    title: params.q ? `Search: ${params.q}` : "Search Buildings",
++    title,
++    description,
++    alternates: { canonical: canonicalUrl(cityPath("/search")) },
++    openGraph: {
++      title,
++      description,
++      url: canonicalUrl(cityPath("/search")),
++      siteName: "Lucid Rents",
++      type: "website",
++      locale: "en_US",
++    },
+   };
+ }
+ 
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index b7f2afd..72e0df6 100644
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -13,11 +13,13 @@ const GA_MEASUREMENT_ID = "G-FS7Q3PF982";
+ const geistSans = Geist({
+   variable: "--font-geist-sans",
+   subsets: ["latin"],
++  display: "swap",
+ });
+ 
+ const geistMono = Geist_Mono({
+   variable: "--font-geist-mono",
+   subsets: ["latin"],
++  display: "swap",
+ });
+ 
+ export const metadata: Metadata = {
+diff --git a/src/app/robots.ts b/src/app/robots.ts
+index e026a58..ce5e38b 100644
+--- a/src/app/robots.ts
++++ b/src/app/robots.ts
+@@ -1,19 +1,45 @@
+-import type { MetadataRoute } from "next";
+-
+-export default function robots(): MetadataRoute.Robots {
+-  // List individual sitemaps since the auto-generated index at /sitemap.xml
+-  // isn't working reliably in this Next.js version
+-  const sitemaps: string[] = [];
+-  for (let i = 0; i <= 15; i++) {
+-    sitemaps.push(`https://lucidrents.com/sitemap/${i}.xml`);
+-  }
+-
+-  return {
+-    rules: {
+-      userAgent: "*",
+-      allow: "/",
+-      disallow: ["/api/", "/dashboard/", "/review/new"],
+-    },
+-    sitemap: sitemaps,
+-  };
+-}
++import type { MetadataRoute } from "next";
++
++const BUILDINGS_PER_SITEMAP = 45000;
++
++async function getSitemapCount(): Promise<number> {
++  try {
++    const res = await fetch(
++      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/buildings?select=id&limit=1&offset=0`,
++      {
++        headers: {
++          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
++          Prefer: "count=exact",
++        },
++      }
++    );
++    const countHeader = res.headers.get("content-range");
++    const totalBuildings = countHeader
++      ? parseInt(countHeader.split("/")[1] || "0", 10)
++      : 50000;
++    // Sitemap 0 = static pages, 1..N = building batches
++    return 1 + Math.ceil(totalBuildings / BUILDINGS_PER_SITEMAP);
++  } catch {
++    // Fallback: assume a reasonable upper bound
++    return 16;
++  }
++}
++
++export default async function robots(): Promise<MetadataRoute.Robots> {
++  const count = await getSitemapCount();
++  const sitemaps: string[] = [];
++  for (let i = 0; i < count; i++) {
++    sitemaps.push(`https://lucidrents.com/sitemap/${i}.xml`);
++  }
++
++  return {
++    rules: [
++      {
++        userAgent: "*",
++        allow: "/",
++        disallow: ["/api/", "/dashboard/"],
++      },
++    ],
++    sitemap: sitemaps,
++  };
++}
+diff --git a/src/lib/seo.ts b/src/lib/seo.ts
+index 238a3f8..7213e42 100644
+--- a/src/lib/seo.ts
++++ b/src/lib/seo.ts
+@@ -110,14 +110,30 @@ export function buildingJsonLd(building: {
+   return schema;
+ }
+ 
+-export function landlordJsonLd(name: string, buildingCount: number) {
+-  return {
++export function landlordJsonLd(
++  name: string,
++  buildingCount: number,
++  avgScore?: number | null
++) {
++  const schema: Record<string, unknown> = {
+     "@context": "https://schema.org",
+     "@type": "Organization",
+     name,
+     url: canonicalUrl(landlordUrl(name)),
+     description: `Property owner managing ${buildingCount} building${buildingCount !== 1 ? "s" : ""} in New York City`,
+   };
++
++  if (avgScore != null && buildingCount > 0) {
++    schema.aggregateRating = {
++      "@type": "AggregateRating",
++      ratingValue: avgScore,
++      bestRating: 10,
++      worstRating: 0,
++      ratingCount: buildingCount,
++    };
++  }
++
++  return schema;
+ }
+ 
+ export function newsCollectionJsonLd() {
+@@ -148,3 +164,31 @@ export function breadcrumbJsonLd(items: { name: string; url: string }[]) {
+     })),
+   };
+ }
++
++export function newsArticleJsonLd(article: {
++  title: string;
++  excerpt: string;
++  slug: string;
++  source_name: string;
++  published_at: string;
++  category: string;
++}) {
++  return {
++    "@context": "https://schema.org",
++    "@type": "NewsArticle",
++    headline: article.title,
++    description: article.excerpt,
++    url: canonicalUrl(cityPath(`/news/${article.slug}`)),
++    datePublished: article.published_at,
++    publisher: {
++      "@type": "Organization",
++      name: "Lucid Rents",
++      url: BASE_URL,
++    },
++    author: {
++      "@type": "Organization",
++      name: article.source_name,
++    },
++    articleSection: article.category,
++  };
++}
+-- 
+2.43.0
+
